@@ -1,0 +1,31 @@
+# Go build files
+/bin/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE/editor configs
+.vscode/
+.idea/
+*.swp
+
+# Dependency directories (for older Go versions)
+vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go modules
+go.sum
+
+# Environment files
+.env
+
+# Fresh temporary files (si usas fresh)
+tmp/
