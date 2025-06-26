@@ -14,7 +14,12 @@ func main() {
 	// 1. Conectar a Cockroach y guardar instancia
 	db := database.InitCockroach()
 
-	// 2. Crear tabla y cargar datos si no existe
+	// 2. Cargar variables de entorno
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("❌ Error cargando .env: %v", err)
+	}
+
+	// 3. Crear tabla y cargar datos si no existe
 	if !database.TableExists(db, "stock_items") {
 		log.Println("🆕 Tabla no existe, creando tabla y cargando datos iniciales...")
 		database.Migrate(db)
@@ -24,11 +29,6 @@ func main() {
 		}
 	} else {
 		log.Println("ℹ️  Tabla stock_items ya existe, no se realiza migración ni carga.")
-	}
-
-	// 3. Cargar variables de entorno
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("❌ Error cargando .env: %v", err)
 	}
 
 	// 4. Configurar servidor

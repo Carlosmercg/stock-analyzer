@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/Carlosmercg/stock-analyzer/internal/dto"
 	"github.com/uptrace/bun"
 )
 
-const apiURL = "https://8j5baasof2.execute-api.us-west-2.amazonaws.com/production/swechallenge/list"
-const authHeader = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdHRlbXB0cyI6MSwiZW1haWwiOiJjYXJsb3NkYXZpZG1lcmNhZG9nYWxsZWdvQGdtYWlsLmNvbSIsImV4cCI6MTc1MDI4MjkxNiwiaWQiOiIwIiwicGFzc3dvcmQiOiInIE9SICcxJz0nMSJ9.AHGTRZxZ3pB-mDozeKnISuGe_OQ7eatzmudauMa7AUs"
 
 type APIResponse struct {
 	Items    []dto.StockItem `json:"items"`
@@ -21,6 +20,14 @@ type APIResponse struct {
 
 // FetchAndStoreStocks descarga los datos y los guarda en la base de datos
 func FetchAndStoreStocks(db *bun.DB) error {
+
+	apiURL := os.Getenv("API_URL")
+	authHeader := os.Getenv("AUTH_HEADER")
+
+	if apiURL == "" || authHeader == "" {
+	return fmt.Errorf("las variables de entorno API_URL o AUTH_HEADER no están definidas")
+}
+
 	url := apiURL
 	page := 1
 	ctx := context.Background()
