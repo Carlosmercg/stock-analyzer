@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,11 +13,32 @@ import (
 
 func GetAllStocks(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var stocks []models.StockItem
+		pageStr := c.DefaultQuery("page", "1")
+		limitStr := c.DefaultQuery("limit", "20")
 
-		err := db.NewSelect().
+		page, err := strconv.Atoi(pageStr)
+		if err != nil || page < 1 {
+			page = 1
+		}
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			limit = 20
+		}
+		offset := (page - 1) * limit
+
+		// ✅ Corregido: asignar ambos valores de retorno
+		total, err := db.NewSelect().Model((*models.StockItem)(nil)).Count(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo contar los registros"})
+			return
+		}
+
+		var stocks []models.StockItem
+		err = db.NewSelect().
 			Model(&stocks).
 			Order("time DESC").
+			Limit(limit).
+			Offset(offset).
 			Scan(c)
 
 		if err != nil {
@@ -24,7 +46,10 @@ func GetAllStocks(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, stocks)
+		c.JSON(http.StatusOK, gin.H{
+			"data":  stocks,
+			"total": total,
+		})
 	}
 }
 
@@ -67,7 +92,7 @@ func GetFilteredStocks(db *bun.DB) gin.HandlerFunc {
 		}
 
 		if company := c.Query("company"); company != "" {
-		query = query.Where("company = ?", company)
+			query = query.Where("company = ?", company)
 		}
 
 		// Ejecutar query
