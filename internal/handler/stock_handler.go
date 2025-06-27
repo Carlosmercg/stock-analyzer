@@ -92,7 +92,7 @@ func GetFilteredStocks(db *bun.DB) gin.HandlerFunc {
 		}
 
 		if company := c.Query("company"); company != "" {
-			query = query.Where("company = ?", company)
+		query = query.Where("company ILIKE ?", company+"%")
 		}
 
 		// Ejecutar query
