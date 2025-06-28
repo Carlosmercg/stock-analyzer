@@ -77,3 +77,5 @@ func FetchAndStoreStocks(db *bun.DB) error {
 	fmt.Println("✅ Datos descargados y almacenados con éxito.")
 	return nil
 }
+
+

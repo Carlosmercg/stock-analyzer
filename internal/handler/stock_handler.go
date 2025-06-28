@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -270,6 +273,63 @@ func GetDistinctRatings(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, ratings)
+	}
+}
+
+func GetCompanyInfoFromFinnhub() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ticker := c.Query("ticker")
+		if ticker == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Ticker requerido"})
+			return
+		}
+
+		apiKey := os.Getenv("FINNHUB_APIKEY")
+		urlTemplate := os.Getenv("FINNHUB_URL")
+
+		if apiKey == "" || urlTemplate == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Falta configuración de Finnhub"})
+			return
+		}
+
+		url := fmt.Sprintf(urlTemplate, ticker, apiKey)
+		resp, err := http.Get(url)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error haciendo la solicitud HTTP"})
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("Error desde Finnhub (código %d)", resp.StatusCode)})
+			return
+		}
+
+		var profile struct {
+			Name     string `json:"name"`
+			WebURL   string `json:"weburl"`
+			Logo     string `json:"logo"`
+			Industry string `json:"finnhubIndustry"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando JSON"})
+			return
+		}
+
+		result := struct {
+			Ticker      string `json:"ticker"`
+			Description string `json:"description"`
+			Domain      string `json:"domain"`
+			LogoURL     string `json:"logo_url"`
+		}{
+			Ticker:      ticker,
+			Description: profile.Industry,
+			Domain:      profile.WebURL,
+			LogoURL:     profile.Logo,
+		}
+
+		c.JSON(http.StatusOK, result)
 	}
 }
 
