@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Carlosmercg/stock-analyzer/internal/models"
 	"github.com/gin-gonic/gin"
@@ -76,16 +75,6 @@ func GetFilteredStocks(db *bun.DB) gin.HandlerFunc {
 		if action := c.Query("action"); action != "" {
 			baseQuery = baseQuery.Where("action = ?", action)
 		}
-		if from := c.Query("from"); from != "" {
-			if t, err := time.Parse("2006-01-02", from); err == nil {
-				baseQuery = baseQuery.Where("time >= ?", t)
-			}
-		}
-		if to := c.Query("to"); to != "" {
-			if t, err := time.Parse("2006-01-02", to); err == nil {
-				baseQuery = baseQuery.Where("time <= ?", t)
-			}
-		}
 		if min := c.Query("target_min"); min != "" {
 			baseQuery = baseQuery.Where("CAST(REPLACE(target_to, '$', '') AS FLOAT) >= ?", min)
 		}
@@ -96,7 +85,14 @@ func GetFilteredStocks(db *bun.DB) gin.HandlerFunc {
 			baseQuery = baseQuery.Where("company ILIKE ?", company+"%")
 		}
 
-		// Obtener total de resultados antes de paginar
+		// 🔃 Orden dinámico por fecha
+		order := strings.ToLower(c.DefaultQuery("order", "desc"))
+		if order != "asc" && order != "desc" {
+			order = "desc"
+		}
+		baseQuery = baseQuery.Order("time " + order)
+
+		// Total de resultados antes de paginar
 		totalQuery := baseQuery.Clone()
 		total, err := totalQuery.Count(c)
 		if err != nil {
@@ -115,22 +111,19 @@ func GetFilteredStocks(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
-		// Obtener resultados paginados
 		var results []models.StockItem
-		err = baseQuery.Order("time DESC").Limit(limit).Offset(offset).Scan(c, &results)
+		err = baseQuery.Limit(limit).Offset(offset).Scan(c, &results)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error consultando datos"})
 			return
 		}
 
-		// Respuesta paginada
 		c.JSON(http.StatusOK, gin.H{
 			"data":  results,
 			"total": total,
 		})
 	}
 }
-
 
 func GetTopInvestmentStocks(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -279,9 +272,6 @@ func GetDistinctRatings(db *bun.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, ratings)
 	}
 }
-
-
-
 
 func parseDollar(s string) (float64, error) {
 	s = strings.ReplaceAll(s, "$", "")
