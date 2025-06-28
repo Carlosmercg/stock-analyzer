@@ -13,6 +13,10 @@ func RegisterStockRoutes(r *gin.RouterGroup, db *bun.DB) {
 		stock.GET("/filter", handler.GetFilteredStocks(db))
 		stock.GET("/top", handler.GetTopInvestmentStocks(db))
 		stock.GET("/top-by-brokerage", handler.GetTopStocksByBrokerage(db))
+		stock.GET("/brokerages", handler.GetDistinctBrokerages(db))
+		stock.GET("/ratings", handler.GetDistinctRatings(db))
+
+
 
 	}
 }

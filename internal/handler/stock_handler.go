@@ -61,56 +61,76 @@ func GetAllStocks(db *bun.DB) gin.HandlerFunc {
 
 func GetFilteredStocks(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		query := db.NewSelect().Model(&[]models.StockItem{})
+		baseQuery := db.NewSelect().Model(&[]models.StockItem{})
 
 		// Filtros opcionales
 		if ticker := c.Query("ticker"); ticker != "" {
-			query = query.Where("ticker = ?", strings.ToUpper(ticker))
+			baseQuery = baseQuery.Where("ticker = ?", strings.ToUpper(ticker))
 		}
 		if brokerage := c.Query("brokerage"); brokerage != "" {
-			query = query.Where("brokerage = ?", brokerage)
+			baseQuery = baseQuery.Where("brokerage = ?", brokerage)
 		}
 		if ratingTo := c.Query("rating_to"); ratingTo != "" {
-			query = query.Where("rating_to = ?", ratingTo)
+			baseQuery = baseQuery.Where("rating_to = ?", ratingTo)
 		}
 		if action := c.Query("action"); action != "" {
-			query = query.Where("action = ?", action)
+			baseQuery = baseQuery.Where("action = ?", action)
 		}
-
-		// Rango de fechas
 		if from := c.Query("from"); from != "" {
 			if t, err := time.Parse("2006-01-02", from); err == nil {
-				query = query.Where("time >= ?", t)
+				baseQuery = baseQuery.Where("time >= ?", t)
 			}
 		}
 		if to := c.Query("to"); to != "" {
 			if t, err := time.Parse("2006-01-02", to); err == nil {
-				query = query.Where("time <= ?", t)
+				baseQuery = baseQuery.Where("time <= ?", t)
 			}
 		}
-
-		// Precio objetivo (target_to) como float (quita el $)
 		if min := c.Query("target_min"); min != "" {
-			query = query.Where("CAST(REPLACE(target_to, '$', '') AS FLOAT) >= ?", min)
+			baseQuery = baseQuery.Where("CAST(REPLACE(target_to, '$', '') AS FLOAT) >= ?", min)
 		}
 		if max := c.Query("target_max"); max != "" {
-			query = query.Where("CAST(REPLACE(target_to, '$', '') AS FLOAT) <= ?", max)
+			baseQuery = baseQuery.Where("CAST(REPLACE(target_to, '$', '') AS FLOAT) <= ?", max)
 		}
-
 		if company := c.Query("company"); company != "" {
-			query = query.Where("company ILIKE ?", company+"%")
+			baseQuery = baseQuery.Where("company ILIKE ?", company+"%")
 		}
 
-		// Ejecutar query
+		// Obtener total de resultados antes de paginar
+		totalQuery := baseQuery.Clone()
+		total, err := totalQuery.Count(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error contando resultados"})
+			return
+		}
+
+		// Paginación
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "21"))
+		if page < 1 {
+			page = 1
+		}
+		if limit <= 0 {
+			limit = 21
+		}
+		offset := (page - 1) * limit
+
+		// Obtener resultados paginados
 		var results []models.StockItem
-		if err := query.Order("time DESC").Scan(c, &results); err != nil {
+		err = baseQuery.Order("time DESC").Limit(limit).Offset(offset).Scan(c, &results)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error consultando datos"})
 			return
 		}
 
-		c.JSON(http.StatusOK, results)
+		// Respuesta paginada
+		c.JSON(http.StatusOK, gin.H{
+			"data":  results,
+			"total": total,
+		})
 	}
 }
+
 
 func GetTopInvestmentStocks(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -221,6 +241,46 @@ func GetTopStocksByBrokerage(db *bun.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, scored[:limit])
 	}
 }
+
+func GetDistinctBrokerages(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var brokerages []string
+
+		err := db.NewSelect().
+			Model((*models.StockItem)(nil)).
+			ColumnExpr("DISTINCT brokerage").
+			OrderExpr("brokerage ASC").
+			Scan(c, &brokerages)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudieron obtener las corredoras"})
+			return
+		}
+
+		c.JSON(http.StatusOK, brokerages)
+	}
+}
+
+func GetDistinctRatings(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ratings []string
+
+		err := db.NewSelect().
+			Model((*models.StockItem)(nil)).
+			ColumnExpr("DISTINCT rating_to").
+			OrderExpr("rating_to ASC").
+			Scan(c, &ratings)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudieron obtener los ratings"})
+			return
+		}
+
+		c.JSON(http.StatusOK, ratings)
+	}
+}
+
+
 
 
 func parseDollar(s string) (float64, error) {
